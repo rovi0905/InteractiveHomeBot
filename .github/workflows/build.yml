@@ -15,14 +15,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+          yes | sdkmanager --licenses >/dev/null || true
+
+          sdkmanager "platform-tools"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -33,28 +40,40 @@ jobs:
         id: project
         shell: bash
         run: |
-          PROJECT_DIR=$(dirname "$(find . \( -name settings.gradle.kts -o -name settings.gradle \) -type f | head -1)")
+          set -e
 
-          if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
-            echo "ERROR: Android project could not be found."
-            find . -maxdepth 6 -type f | sort | head -200
+          PROJECT_DIR="$(dirname "$(find . -type f \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) | head -1)")"
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: No Android Gradle project found."
+            find . -maxdepth 8 -type f | sort | head -300
             exit 1
           fi
 
-          echo "Android project found at: $PROJECT_DIR"
+          echo "Android project found at:"
+          echo "$PROJECT_DIR"
+
           echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Build APK
+      - name: Build Debug APK
         shell: bash
         run: |
+          set -e
+
           cd "${{ steps.project.outputs.project_dir }}"
-          echo "Building from: $(pwd)"
+
+          echo "Building from:"
+          pwd
+
+          echo "Project files:"
+          ls -la
+
           gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Find APK
+      - name: Locate APK
         shell: bash
         run: |
-          echo "APK files produced:"
+          echo "Searching for APK..."
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
