@@ -33,11 +33,11 @@ jobs:
         id: project
         shell: bash
         run: |
-          PROJECT_DIR=$(dirname "$(find . -name settings.gradle.kts -o -name settings.gradle | head -1)")
+          PROJECT_DIR=$(dirname "$(find . \( -name settings.gradle.kts -o -name settings.gradle \) -type f | head -1)")
 
           if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
             echo "ERROR: Android project could not be found."
-            find . -maxdepth 5 -type f | sort | head -200
+            find . -maxdepth 6 -type f | sort | head -200
             exit 1
           fi
 
