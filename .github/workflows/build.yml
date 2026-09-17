@@ -1,10 +1,6 @@
 name: Build Android APK
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
   build:
@@ -24,6 +20,14 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
       - name: Extract Android project
         shell: bash
         run: |
@@ -39,21 +43,13 @@ jobs:
           echo "Found ZIP:"
           echo "$ZIP_FILE"
 
+          rm -rf android-project
           mkdir -p android-project
+
           unzip -q "$ZIP_FILE" -d android-project
 
           echo "Extracted files:"
           find android-project -maxdepth 5 -type f | sort | head -300
-
-      - name: Install Android SDK packages
-        shell: bash
-        run: |
-          set -e
-
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
 
       - name: Find Android project
         id: project
@@ -63,15 +59,12 @@ jobs:
 
           PROJECT_FILE=$(find android-project \
             -type f \
-            \( -name "settings.gradle.kts" -o -name "settings.gradle" \) \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
             | head -1)
 
           if [ -z "$PROJECT_FILE" ]; then
             echo "ERROR: Android Gradle project not found."
-
-            echo "Searching extracted files:"
-            find android-project -type f | sort | head -500
-
+            find android-project -type f | sort
             exit 1
           fi
 
@@ -89,14 +82,9 @@ jobs:
 
           cd "${{ steps.project.outputs.project_dir }}"
 
-          echo "Project directory:"
-          pwd
-
-          echo "Project contents:"
-          ls -la
-
           if [ ! -f "./gradlew" ]; then
             echo "ERROR: gradlew was not found."
+            ls -la
             exit 1
           fi
 
