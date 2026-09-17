@@ -1,107 +1,104 @@
 name: Build Android APK
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+push:
+branches:
+- main
+workflow_dispatch:
 
 jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
+build:
+name: Build Android APK
+runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
+  - name: Set up Java 17
+    uses: actions/setup-java@v5
+    with:
+      distribution: temurin
+      java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: ''
+  - name: Set up Android SDK
+    uses: android-actions/setup-android@v4
 
-      - name: Verify Android SDK
-        shell: bash
-        run: |
-          set -e
+  - name: Install Android SDK packages
+    run: |
+      sdkmanager --install \
+        "platform-tools" \
+        "platforms;android-35" \
+        "build-tools;35.0.0"
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+  - name: Find Android project
+    id: project
+    shell: bash
+    run: |
+      set -e
 
-          echo "sdkmanager location:"
-          command -v sdkmanager
+      PROJECT_FILE=$(find . -type f \
+        -name "settings.gradle.kts" -o -name "settings.gradle" \
+        | head -1)
 
-          echo "sdkmanager version:"
-          sdkmanager --version
+      if [ -z "$PROJECT_FILE" ]; then
+        echo "ERROR: Android Gradle project not found."
+        find . -maxdepth 8 -type f | sort | head -300
+        exit 1
+      fi
 
-      - name: Install Android SDK packages
-        shell: bash
-        run: |
-          set -e
+      PROJECT_DIR=$(dirname "$PROJECT_FILE")
 
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+      echo "Android project found at:"
+      echo "$PROJECT_DIR"
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
+      echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Find Android project
-        id: project
-        shell: bash
-        run: |
-          set -e
+  - name: Check Gradle Wrapper
+    shell: bash
+    run: |
+      set -e
 
-          PROJECT_FILE=$(find . -type f \
-            \( -name "settings.gradle.kts" -o -name "settings.gradle" \) \
-            | head -1)
+      cd "${{ steps.project.outputs.project_dir }}"
 
-          if [ -z "$PROJECT_FILE" ]; then
-            echo "ERROR: Android Gradle project not found."
-            find . -maxdepth 8 -type f | sort | head -300
-            exit 1
-          fi
+      echo "Project directory:"
+      pwd
 
-          PROJECT_DIR=$(dirname "$PROJECT_FILE")
+      echo "Project files:"
+      ls -la
 
-          echo "Android project:"
-          echo "$PROJECT_DIR"
+      if [ ! -f "./gradlew" ]; then
+        echo "ERROR: gradlew was not found."
+        exit 1
+      fi
 
-          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+      chmod +x ./gradlew
 
-      - name: Build APK
-        shell: bash
-        run: |
-          set -e
+      echo "Gradle wrapper found:"
+      ./gradlew --version
 
-          cd "${{ steps.project.outputs.project_dir }}"
+  - name: Build Debug APK
+    shell: bash
+    run: |
+      set -e
 
-          echo "Building from:"
-          pwd
+      cd "${{ steps.project.outputs.project_dir }}"
 
-          echo "Project contents:"
-          ls -la
+      chmod +x ./gradlew
 
-          gradle assembleDebug --no-daemon --stacktrace
+      ./gradlew assembleDebug \
+        --no-daemon \
+        --stacktrace
 
-      - name: Find APK
-        shell: bash
-        run: |
-          echo "APK files:"
-          find . -type f -name "*.apk" -print
+  - name: Find APK
+    shell: bash
+    run: |
+      echo "APK files found:"
+      find . -type f -name "*.apk" -print
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: InteractiveHomeBot-APK
-          path: "**/build/outputs/apk/**/*.apk"
-          if-no-files-found: error
+  - name: Upload APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: InteractiveHomeBot-APK
+      path: "**/build/outputs/apk/**/*.apk"
+      if-no-files-found: error
